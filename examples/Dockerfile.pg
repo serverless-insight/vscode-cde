@@ -1,0 +1,31 @@
+FROM --platform=linux/amd64 postgres:latest
+
+# 更新包列表并安装 supervisor 和 openssh-server
+RUN apt-get update && \
+    apt-get install -y supervisor openssh-server && \
+    mkdir -p /var/run/sshd && \
+    mkdir -p /var/log/supervisor
+
+# 配置 SSH
+# 设置 root 用户密码（建议通过环境变量传入密码）
+# 为了安全性，建议使用密钥认证，这里仅为示例
+RUN echo "${ROOT_PASSWORD:-rootpassword}" | chpasswd && \
+    sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/^#Port 22/Port 22/' /etc/ssh/sshd_config && \
+    sed -i 's/^UsePAM yes/UsePAM no/' /etc/ssh/sshd_config
+
+# 创建 supervisor 配置目录
+RUN mkdir -p /etc/supervisor/conf.d
+COPY supervisord.pg.conf /etc/supervisor/conf.d/supervisord.conf
+
+# 设置必要的环境变量（可以在运行容器时覆盖这些值）
+ENV POSTGRES_USER=postgres
+ENV POSTGRES_PASSWORD=postgres
+ENV POSTGRES_DB=testdb
+ENV ROOT_PASSWORD=password
+
+# 暴露 PostgreSQL 和 SSH 端口
+EXPOSE 5432 22
+
+# 启动 supervisord
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM docker:dind
 
 RUN echo "Asia/Shanghai" > /etc/timezone &&\ 
     apt-get update || apt install -y tzdata &&\

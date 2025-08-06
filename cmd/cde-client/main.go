@@ -3,14 +3,15 @@ package main
 import (
 	"log"
 	"net/url"
-	"vscode-cde/internal/cde"
+	"vscode-cde/pkg/cde"
 
 	"github.com/gorilla/websocket"
 )
 
-const HOST = "localhost:9000"
+// const HOST = "localhost:9000"
 
 // const HOST = "cde-server-edeirgdpjq.cn-hangzhou.fcapp.run"
+const HOST = "cde-begxigkief.cn-hongkong.fcapp.run"
 
 func main() {
 	u := url.URL{Scheme: "ws", Host: HOST, Path: "/serve"}
