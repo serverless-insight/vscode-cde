@@ -103,7 +103,7 @@ func (c *connection) send(msg Message) (err error) {
 	return
 }
 
-func newForwardConnection(channel, port int, msgChan chan Message) (c connection) {
+func newForwardConnection(channel, port int, msgChan chan Message) (c connection, err error) {
 	c = connection{
 		channel:   channel,
 		port:      port,
@@ -111,10 +111,9 @@ func newForwardConnection(channel, port int, msgChan chan Message) (c connection
 		msgChan:   msgChan,
 		hostChan:  make(chan Message),
 	}
-	if err := c.establish(); err != nil {
-		// TODO: 需要 client 和 server 对齐连接失败的处理，可以用特殊的 msg type 通知 client
+	if err = c.establish(); err != nil {
+		// Send error message to client
 		msgChan <- NewErrorMessage(channel, err)
-		log.Fatal(err)
 		return
 	}
 
@@ -203,8 +202,10 @@ func (cm *ConnectionManager) addForwardGroup(port int) (pg PortGroup) {
 	return
 }
 
-func (cm *ConnectionManager) addForwardConnection(channel, port int) (c connection) {
-	c = newForwardConnection(channel, port, cm.msgChan)
+func (cm *ConnectionManager) addForwardConnection(channel, port int) (c connection, err error) {
+	if c, err = newForwardConnection(channel, port, cm.msgChan); err != nil {
+		return
+	}
 	pg := cm.FetchForwardGroup(port)
 	pg.connections[channel] = &c
 
@@ -256,7 +257,7 @@ func (cm *ConnectionManager) addListenerGroup(port, localPort int) (pg PortGroup
 
 func (cm *ConnectionManager) availableChannel() (channel int) {
 	// TODO: 需要锁来保证不会有重复分配的 channel
-	bitset := make([]interface{}, 256)
+	bitset := make([]any, 256)
 	for _, conn := range cm.connections {
 		if conn != nil {
 			bitset[conn.channel] = struct{}{}

@@ -17,6 +17,7 @@ var upgrader = websocket.Upgrader{
 }
 
 func serve(w http.ResponseWriter, r *http.Request) {
+	log.Println("serve")
 	server := cde.NewServer()
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
