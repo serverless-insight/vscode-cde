@@ -12,7 +12,8 @@ import (
 
 // const HOST = "cde-server-edeirgdpjq.cn-hangzhou.fcapp.run"
 // const HOST = "cde-begxigkief.cn-hongkong.fcapp.run"
-const HOST = "1270939-proxy-9000.dsw-gateway-cn-hangzhou.data.aliyun.com"
+// const HOST = "1270939-proxy-9000.dsw-gateway-cn-hangzhou.data.aliyun.com"
+const HOST = "9000-a4d7a35c9313-web.clackypaas.com"
 
 func main() {
 	u := url.URL{Scheme: "wss", Host: HOST, Path: "/serve"}

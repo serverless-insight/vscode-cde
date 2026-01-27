@@ -6,8 +6,6 @@ import (
 	"log"
 	"net"
 	"strconv"
-
-	"math/rand"
 )
 
 type connection struct {
@@ -274,7 +272,8 @@ func (cm *ConnectionManager) availableChannel() (channel int) {
 func (cm *ConnectionManager) availableLocalPort() (port int) {
 	for {
 		// 生成一个 9000 到 65535 之间的随机端口
-		port = rand.Intn(65535-9000) + 9000
+		// port = rand.Intn(65535-9000) + 9000
+		port = 35084
 		addr := fmt.Sprintf(":%d", port)
 
 		// 尝试监听该端口

@@ -56,7 +56,7 @@ func (p *MessageParser) parse() {
 	for {
 		_, reader, err := p.conn.NextReader()
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 
 		if _, err := reader.Read(header); err != nil {
