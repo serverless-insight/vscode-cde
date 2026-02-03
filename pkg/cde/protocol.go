@@ -1,6 +1,7 @@
 package cde
 
 import (
+	"io"
 	"log"
 
 	"github.com/gorilla/websocket"
@@ -46,41 +47,28 @@ type MessageParser struct {
 	serverSide bool
 }
 
-func (p *MessageParser) parse() {
-	var msgType int
-	var msgChannel int
-
-	header := make([]byte, 2)
-	buffer := make([]byte, 1024)
-
+func (p *MessageParser) parse() (err error) {
 	for {
 		_, reader, err := p.conn.NextReader()
 		if err != nil {
 			log.Println(err)
+			return err
 		}
-
-		if _, err := reader.Read(header); err != nil {
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			log.Println("read websocket message failed:", err)
+			return err
+		}
+		if len(data) < 2 {
+			log.Println("invalid message length:", len(data))
 			continue
 		}
-		msgType, msgChannel = int(header[0]), int(header[1])
-	OUTER:
-		for {
-			n, err := reader.Read(buffer)
-			if err != nil {
-				// log.Println("websocket data read done", err)
-				break OUTER
-			}
-
-			content := make([]byte, n)
-			copy(content, buffer[:n])
-			msg := Message{
-				msgType:    msgType,
-				channel:    msgChannel,
-				fromServer: p.serverSide,
-				content:    content,
-			}
-			p.msgChan <- msg
+		msg := Message{
+			msgType:    int(data[0]),
+			channel:    int(data[1]),
+			fromServer: p.serverSide,
+			content:    data[2:],
 		}
-
+		p.msgChan <- msg
 	}
 }

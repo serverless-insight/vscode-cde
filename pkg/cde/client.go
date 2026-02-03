@@ -41,9 +41,19 @@ func (c *Client) handleMessage(conn *websocket.Conn) {
 	}
 }
 
-func (c *Client) Run(conn *websocket.Conn) {
+func (c *Client) Run(conn *websocket.Conn) error {
 	// 先启动消息处理
-	go c.handleMessage(conn)
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Println("error handle message: ", err)
+				close(c.msgChan)
+				c.messageParser.conn.Close()
+				return
+			}
+		}()
+		c.handleMessage(conn)
+	}()
 
 	// 1. send init message to server
 	c.msgChan <- Message{
@@ -54,16 +64,16 @@ func (c *Client) Run(conn *websocket.Conn) {
 	// // 2. 创建一个 ssh 的 serveConnection
 	if _, err := c.connectionManager.FetchListenerGroup(22); err != nil {
 		log.Fatal(err)
-		return
+		return err
 	}
 
 	// receive and parse messages from server
 	c.messageParser = &MessageParser{conn, c.msgChan, true}
-	c.messageParser.parse()
+	return c.messageParser.parse()
 }
 
 func NewClient() (client Client) {
-	msgChan := make(chan Message)
+	msgChan := make(chan Message, 1024)
 	client = Client{
 		msgChan:           msgChan,
 		connectionManager: NewConnectionManager(msgChan),

@@ -17,6 +17,19 @@ type connection struct {
 	hostChan  chan Message
 }
 
+const tcpBufferSize = 32 * 1024
+
+func writeAll(conn net.Conn, data []byte) error {
+	for len(data) > 0 {
+		n, err := conn.Write(data)
+		if err != nil {
+			return err
+		}
+		data = data[n:]
+	}
+	return nil
+}
+
 func (c *connection) establish() (err error) {
 	c.conn, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", c.port))
 	log.Println("dial local port: ", c.port)
@@ -26,27 +39,31 @@ func (c *connection) establish() (err error) {
 
 	c.connected = true
 	go func() {
-		buffer := make([]byte, 1024)
+		defer func() {
+			if err := recover(); err != nil {
+				return
+			}
+		}()
+		buffer := make([]byte, tcpBufferSize)
 		for {
 			n, err := c.conn.Read(buffer)
+			if n > 0 {
+				content := make([]byte, n)
+				copy(content, buffer[:n])
+				msg := Message{
+					msgType:    MSG_FORWARD,
+					channel:    c.channel,
+					fromServer: true,
+					content:    content,
+				}
+				c.msgChan <- msg
+			}
 			if err != nil {
 				if err != io.EOF {
 					log.Println("Failed to read from localport:", err)
-					return
 				}
-			}
-			content := make([]byte, n)
-			copy(content, buffer[:n])
-			msg := Message{
-				msgType:    MSG_FORWARD,
-				channel:    c.channel,
-				fromServer: true,
-				content:    content,
-			}
-			c.msgChan <- msg
-			if err == io.EOF {
 				c.connected = false
-				break
+				return
 			}
 		}
 	}()
@@ -54,9 +71,28 @@ func (c *connection) establish() (err error) {
 }
 
 func (c connection) serve() (err error) {
-	buffer := make([]byte, 1024)
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("error serve connection: ", err)
+			if e, ok := err.(error); ok && e.Error() != "send on closed channel" {
+				close(c.msgChan)
+			}
+			c.conn.Close()
+		}
+	}()
+	buffer := make([]byte, tcpBufferSize)
 	for {
 		n, err := c.conn.Read(buffer)
+		if n > 0 {
+			content := make([]byte, n)
+			copy(content, buffer[:n])
+			msg := Message{
+				msgType: MSG_FORWARD,
+				channel: c.channel,
+				content: content,
+			}
+			c.msgChan <- msg
+		}
 		if err != nil {
 			if err == io.EOF {
 				log.Println("Connection closed")
@@ -65,24 +101,13 @@ func (c connection) serve() (err error) {
 					channel: c.channel,
 					content: []byte(strconv.Itoa(c.port)),
 				}
+				c.connected = false
 				break
 			}
-			if err != io.EOF {
-				log.Println("Failed to read from the client:", err)
-				// connection closed, just return and close current connection
-				// panic(err)
-				return nil
-			}
+			log.Println("Failed to read from the client:", err)
+			// connection closed, just return and close current connection
+			return nil
 		}
-		content := make([]byte, n)
-		copy(content, buffer[:n])
-
-		msg := Message{
-			msgType: MSG_FORWARD,
-			channel: c.channel,
-			content: content,
-		}
-		c.msgChan <- msg
 	}
 	return
 }
@@ -97,7 +122,10 @@ func (c *connection) send(msg Message) (err error) {
 		c.connected = true
 	}
 
-	_, err = c.conn.Write(msg.content)
+	if c.conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+	err = writeAll(c.conn, msg.content)
 	return
 }
 
@@ -238,6 +266,12 @@ func (cm *ConnectionManager) addListenerGroup(port, localPort int) (pg PortGroup
 	cm.portGroups[port] = pg
 
 	go pg.Serve(cm.availableChannel(), cm.msgChan, func(c *connection) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Println("err add listener group: ", err)
+				return
+			}
+		}()
 		c.channel = cm.availableChannel()
 
 		cm.connections[c.channel] = c
