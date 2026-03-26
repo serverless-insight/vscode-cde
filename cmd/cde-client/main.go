@@ -11,23 +11,27 @@ import (
 )
 
 func main() {
+	client := cde.NewClient()
 	for {
 		// 1s 自动重连
-		run()
+		run(&client)
 		time.Sleep(1 * time.Second)
 	}
 }
 
-func run() {
+func run(client *cde.Client) {
 	host := os.Getenv("HOST")
 	u := url.URL{Scheme: "wss", Host: host, Path: "/serve"}
 	log.Printf("connecting to %s", u.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		log.Fatal("dial:", err)
+		log.Println("dial:", err)
+		return
 	}
+	defer c.Close()
 
-	client := cde.NewClient()
-	client.Run(c)
+	if err := client.Run(c); err != nil {
+		log.Println("client run error:", err)
+	}
 }

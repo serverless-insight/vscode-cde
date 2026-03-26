@@ -189,7 +189,7 @@ func (pg *PortGroup) Serve(channel int, msgChan chan Message, callback OnListene
 
 		// channel 需要在 callback 中设置，此时先置为 0
 		connection := newListenerConnection(conn, pg.port, msgChan, callback)
-		pg.connections[channel] = &connection
+		pg.connections[connection.channel] = &connection
 	}
 }
 
@@ -204,10 +204,24 @@ type OnListenerConnectionCallback func(c *connection)
 
 func (cm *ConnectionManager) CloseConnection(channel int) {
 	conn := cm.connections[channel]
-	if conn.connected {
+	if conn != nil && conn.connected && conn.conn != nil {
 		conn.conn.Close()
 	}
 	cm.connections[channel] = nil
+}
+
+func (cm *ConnectionManager) CloseActiveConnections() {
+	for channel, conn := range cm.connections {
+		if conn != nil && conn.conn != nil {
+			conn.conn.Close()
+		}
+		cm.connections[channel] = nil
+	}
+
+	for port, pg := range cm.portGroups {
+		pg.connections = make(map[int]*connection)
+		cm.portGroups[port] = pg
+	}
 }
 
 func (cm *ConnectionManager) FetchForwardGroup(port int) (pg PortGroup) {
@@ -323,7 +337,11 @@ func (cm *ConnectionManager) availableLocalPort() (port int) {
 }
 
 func (cm *ConnectionManager) WriteMessage(msg Message) (err error) {
-	err = cm.connections[msg.channel].send(msg)
+	conn := cm.connections[msg.channel]
+	if conn == nil {
+		return fmt.Errorf("connection %d not found", msg.channel)
+	}
+	err = conn.send(msg)
 	return
 }
 
